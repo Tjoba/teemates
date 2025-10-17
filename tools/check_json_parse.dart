@@ -1,0 +1,1 @@
+import "dart:io"; import "dart:convert"; void main() async { final file = File("lib/golf_courses_sweden.json"); final content = await file.readAsString(); final data = json.decode(content); print(data.length); print(data[0]); }

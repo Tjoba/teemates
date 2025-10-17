@@ -3,6 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+// ...existing code...
+import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
 
 void main() {
   runApp(TeeMatesApp());
@@ -317,12 +320,230 @@ class TeeMatesPage extends StatelessWidget {
   }
 }
 
-class PlayPage extends StatelessWidget {
+class PlayPage extends StatefulWidget {
+  @override
+  _PlayPageState createState() => _PlayPageState();
+}
+
+class _PlayPageState extends State<PlayPage> {
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _golfCourses = [];
+  List<Map<String, dynamic>> _filteredCourses = [];
+  bool _loading = false;
+  bool _loaded = false;
+
+  Future<void> _loadGolfCourses() async {
+    setState(() { _loading = true; });
+    try {
+      final content = await rootBundle.loadString('lib/golf_courses_sweden.json');
+      final List data = json.decode(content);
+      final loadedCourses = List<Map<String, dynamic>>.from(data);
+      setState(() {
+        _golfCourses = loadedCourses;
+        _filteredCourses = [];
+        _loaded = true;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() { _loading = false; });
+    }
+  }
+
+  // ...existing code...
+
+  @override
+  void initState() {
+    super.initState();
+  _loadGolfCourses();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Color(0xFFF5F5F5),
-      child: Center(child: Text('Play Page')),
+    return SafeArea(
+      child: Container(
+        color: Color(0xFFF5F5F5),
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onTap: () async {
+                await showDialog(
+                  context: context,
+                  barrierDismissible: true,
+                  builder: (context) {
+                    TextEditingController dialogSearchController = TextEditingController();
+                    List<Map<String, dynamic>> dialogFilteredCourses = [];
+                    return StatefulBuilder(
+                      builder: (context, setStateDialog) {
+                        void updateDialogSearch(String value) {
+                          final query = value.trim().toLowerCase();
+                          setStateDialog(() {
+                            if (query.isEmpty) {
+                              dialogFilteredCourses = [];
+                            } else {
+                              dialogFilteredCourses = _golfCourses.where((course) {
+                                final name = (course['name'] ?? '').toString().trim().toLowerCase();
+                                return name.contains(query);
+                              }).toList();
+                            }
+                          });
+                        }
+                        return Dialog(
+                          insetPadding: EdgeInsets.zero,
+                          backgroundColor: Color(0xFFF5F5F5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                          ),
+                          child: Container(
+                            width: double.infinity,
+                            height: MediaQuery.of(context).size.height * 0.85,
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Search Golf Courses', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                    IconButton(
+                                      icon: Icon(Icons.close),
+                                      onPressed: () => Navigator.of(context).pop(),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 8),
+                                // ...existing code...
+                                StatefulBuilder(
+                                  builder: (context, setStateDialog) {
+                                    return TextField(
+                                      controller: dialogSearchController,
+                                      autofocus: true,
+                                      decoration: InputDecoration(
+                                        hintText: 'Type to search...',
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        prefixIcon: Icon(Icons.search),
+                                        suffixIcon: dialogSearchController.text.isNotEmpty
+                                            ? IconButton(
+                                                icon: Icon(Icons.clear),
+                                                onPressed: () {
+                                                  dialogSearchController.clear();
+                                                  updateDialogSearch('');
+                                                  setStateDialog(() {});
+                                                },
+                                              )
+                                            : null,
+                                        contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                      ),
+                                      onChanged: (value) {
+                                        updateDialogSearch(value);
+                                        setStateDialog(() {});
+                                      },
+                                    );
+                                  },
+                                ),
+                                SizedBox(height: 16),
+                                Expanded(
+                                  child: dialogFilteredCourses.isEmpty
+                                      ? Center(child: Text('No results'))
+                                      : ListView.builder(
+                                          itemCount: dialogFilteredCourses.length,
+                                          itemBuilder: (context, index) {
+                                            final course = dialogFilteredCourses[index];
+                                            return Card(
+                                              child: ListTile(
+                                                title: Text(course['name'] ?? ''),
+                                                subtitle: Text('Holes: ${course['holes'] ?? 'N/A'}'),
+                                                onTap: () {
+                                                  Navigator.of(context).push(
+                                                    MaterialPageRoute(
+                                                      builder: (context) => Scaffold(
+                                                        appBar: AppBar(title: Text('Golf Course')),
+                                                        body: Center(
+                                                          child: Text(
+                                                            course['name'] ?? '',
+                                                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+              child: AbsorbPointer(
+                child: TextField(
+                  controller: _searchController,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    hintText: 'Type to search...',
+                    filled: true,
+                    fillColor: Colors.white,
+                    prefixIcon: Icon(Icons.search),
+                    contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  enabled: true,
+                ),
+              ),
+            ),
+            SizedBox(height: 16),
+            if (_loading)
+              Center(child: CircularProgressIndicator()),
+            if (!_loading && _loaded && _filteredCourses.isNotEmpty)
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _filteredCourses.length,
+                  itemBuilder: (context, index) {
+                    final course = _filteredCourses[index];
+                    return Card(
+                      child: ListTile(
+                        title: Text(course['name'] ?? ''),
+                        subtitle: Text('Holes: ${course['holes'] ?? 'N/A'}'),
+                        onTap: () {
+                          // Handle course selection here
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text(course['name'] ?? ''),
+                              content: Text('Holes: ${course['holes'] ?? 'N/A'}\nWebsite: ${course['website'] ?? 'N/A'}'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: Text('Close'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
